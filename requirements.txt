@@ -1,7 +1,4 @@
-discord
-os
-json
-random
-datetime
-requests
-praw
+discord==2.0.0
+datetime==5.1
+requests==2.28.1
+praw==7.7.0
