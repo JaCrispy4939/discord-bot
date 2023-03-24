@@ -4,6 +4,7 @@ import discord
 from discord.ext import commands
 import os
 import json
+import time
 import random
 import datetime
 import requests
@@ -19,9 +20,15 @@ with open('economy.json', 'r') as f:
 client = discord.Client(intents=discord.Intents.default())
 client = commands.Bot(command_prefix=".", intents=discord.Intents.all())
 
+client.remove_command('help')  # Removes the default help command
+
 @client.event
 async def on_ready():
     await client.change_presence(activity=discord.Game(name=".help"))
+
+@client.command()
+async def help(ctx):
+    await ctx.send("**Fun**\n.meme\n.level\n.inspire\nmagic8ball (question here)\n.coinflip\n**Economy**\n.earn\n.balance\n.crime\n.gamble (amount here)\n**Useful**\n.serverinfo\n.userinfo @user\n.botinfo\n.uptime\n.sourcecode")
 
 @commands.cooldown(1, 3600, commands.BucketType.user)
 @client.command()
@@ -29,7 +36,7 @@ async def earn(ctx):
     user = str(ctx.author.id)
     if user not in economy:
         economy[user] = {'coins': 1000, 'commands_used': 0, 'level': 1}
-    amount = random.randint(1, 100)
+    amount = random.randint(100, 300)
     economy[user]['coins'] += amount
     economy[user]['commands_used'] += 1
     current_level = economy[user]['level']
@@ -42,6 +49,7 @@ async def earn(ctx):
     with open('economy.json', 'w') as f:
         json.dump(economy, f)
 
+@commands.cooldown(1, 5400, commands.BucketType.user)
 @client.command()
 async def crime(ctx):
     user = str(ctx.author.id)
@@ -259,6 +267,23 @@ reddit = praw.Reddit(client_id='',
                      user_agent='myBot/0.0.1')
 
 @client.command()
+async def coinflip(ctx):
+    user = str(ctx.author.id)
+    result = random.choice(['Heads', 'Tails'])
+    main_message = await ctx.send('Flipping Coin')
+    time.sleep(.5)
+    await main_message.edit(content="Flipping Coin.")
+    time.sleep(.5)
+    await main_message.edit(content="Flipping Coin..")
+    time.sleep(.5)
+    await main_message.edit(content="Flipping Coin...")
+    time.sleep(.5)
+    await main_message.edit(content=f"The coin landed on {result}")
+    economy[user]['commands_used'] += 1
+    with open('economy.json', 'w') as f:
+        json.dump(economy, f)
+
+@client.command()
 async def meme(ctx):
     user = str(ctx.author.id)
 
@@ -267,6 +292,16 @@ async def meme(ctx):
     random_post = random.choice(list(posts))
     image_url = random_post.url
     await ctx.channel.send(image_url)
+    economy[user]['commands_used'] += 1
+    with open('economy.json', 'w') as f:
+        json.dump(economy, f)
+
+@client.command()
+async def sourcecode(ctx):
+    user = str(ctx.author.id)
+    url = 'https://github.com/JaCrispy4939/discord-bot'
+    await ctx.send("This project is fully open source, just please dont steal the code.")
+    await ctx.send(f'The code: {url}')
     economy[user]['commands_used'] += 1
     with open('economy.json', 'w') as f:
         json.dump(economy, f)
@@ -283,10 +318,10 @@ async def on_command_error(ctx, error):
     if isinstance(error, commands.CommandOnCooldown):
         remaining = divmod(error.retry_after, 60)
         remaining_str = f"{int(remaining[0] // 60)} hours, {int(remaining[0] % 60)} minutes"
-        await ctx.send(f"You can't use that command yet. Try again in {remaining_str}.")
+        await ctx.send(f"you can use that command again in {remaining_str}.")
     else:
         raise error
 
 # Start the bot
 print("Bot Online")
-client.run('notsharingmybotstoken')
+client.run('notsharingthis')
