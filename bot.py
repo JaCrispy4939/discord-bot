@@ -1,11 +1,13 @@
-#made by Ja'Crispy
+#Made by Ja'Crispy
 #Please do not steal this code and call it yours
 import discord
 from discord.ext import commands
+import os
 import json
 import random
 import datetime
 import requests
+import praw
 
 start_time = datetime.datetime.now()
 
@@ -228,7 +230,7 @@ async def userinfo(ctx, member: discord.Member = None):
     await ctx.send(embed=embed)
     economy[user]['commands_used'] += 1
     with open('economy.json', 'w') as f:
-        json.dump(economy, f)
+        json.dump(economy, f) 
 
 @client.command()
 async def serverinfo(ctx):
@@ -252,6 +254,23 @@ async def serverinfo(ctx):
     with open('economy.json', 'w') as f:
         json.dump(economy, f)
 
+reddit = praw.Reddit(client_id='',
+                     client_secret='',
+                     user_agent='myBot/0.0.1')
+
+@client.command()
+async def meme(ctx):
+    user = str(ctx.author.id)
+
+    subreddit = reddit.subreddit('memes')
+    posts = subreddit.hot(limit=100)
+    random_post = random.choice(list(posts))
+    image_url = random_post.url
+    await ctx.channel.send(image_url)
+    economy[user]['commands_used'] += 1
+    with open('economy.json', 'w') as f:
+        json.dump(economy, f)
+
 # Save economy data when bot shuts down
 @client.event
 async def on_shutdown():
@@ -270,4 +289,4 @@ async def on_command_error(ctx, error):
 
 # Start the bot
 print("Bot Online")
-client.run('imnotsharingmytoken')
+client.run('notsharingmybotstoken')
