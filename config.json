@@ -1,5 +1,7 @@
 {
-	"token": "yourdiscordbottokenhere",
+    "token": "yourdiscordbottokenhere",
     "redditclientid" : "yourredditclientidhere",
     "redditclientseceret" : "yourredditclientsecerethere"
+    "gifapi" : "yourgifphyapihere",
+    "wolframid" : "yourwolframalphaidhere"
 }
