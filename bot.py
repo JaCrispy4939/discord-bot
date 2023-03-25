@@ -2,6 +2,8 @@
 #Please do not steal this code and call it yours
 import discord
 from discord.ext import commands
+from discord.utils import get
+from discord import FFmpegPCMAudio
 import os
 import json
 import time
@@ -11,21 +13,27 @@ import requests
 import praw
 from io import BytesIO
 from PIL import Image, ImageDraw, ImageFont
+import wolframalpha
+import asyncio
+
 
 start_time = datetime.datetime.now()
 
-# Load economy data from economy.json
+
 with open('economy.json', 'r') as f:
     economy = json.load(f)
 
 with open('config.json', 'r') as f:
     config = json.load(f)
 
-# Initialize bot with a command prefix
+with open('stats.json', 'r') as f:
+    stats = json.load(f)
+
+
 client = discord.Client(intents=discord.Intents.default())
 client = commands.Bot(command_prefix=".", intents=discord.Intents.all())
 
-client.remove_command('help')  # Removes the default help command
+client.remove_command('help')  
 
 @client.event
 async def on_ready():
@@ -33,14 +41,14 @@ async def on_ready():
 
 @client.command()
 async def help(ctx):
-    await ctx.send("**Fun**\n.meme\n.level\n.inspire\nmagic8ball (question here)\n.coinflip\n.quote\n**Economy**\n.earn\n.balance\n.crime\n.gamble (amount here)\n**Useful**\n.serverinfo\n.userinfo @user\n.botinfo\n.uptime\n.sourcecode")
+    await ctx.send("**Fun**\n.meme\n.gif term\n.trivia\n.mystats\n.level\n.inspire\nmagic8ball (question here)\n.coinflip\n.quote\n.fact\n**Economy**\n.earn\n.balance\n.crime\n.gamble (amount here)\n**Useful**\n.serverinfo\n.userinfo @user\n.botinfo\n.uptime\n.sourcecode\n**Moderation**\n.clear (amount)\n.kick @user\n.mute @user\n.unmute @user\n")
 
 @commands.cooldown(1, 3600, commands.BucketType.user)
 @client.command()
 async def earn(ctx):
     user = str(ctx.author.id)
     if user not in economy:
-        economy[user] = {'coins': 1000, 'commands_used': 0, 'level': 1}
+        economy[user] = {'username': ctx.message.author.name, 'coins': 1000, 'commands_used': 0, 'level': 1}
     amount = random.randint(100, 300)
     economy[user]['coins'] += amount
     economy[user]['commands_used'] += 1
@@ -54,12 +62,34 @@ async def earn(ctx):
     with open('economy.json', 'w') as f:
         json.dump(economy, f)
 
+@client.command()
+async def leaderboard(ctx):
+    
+    data = economy
+    sorted_data = sorted(data.items(), key=lambda x: x[1].get('level', 0), reverse=True)
+
+    
+    leaderboard_message = "**Leaderboard:**\n"
+    for i, (user_id, data) in enumerate(sorted_data[:10]): # Only display top 10 users
+        
+        user_name = data.get('username', 'Unknown')
+
+        leaderboard_message += f"{i+1}. {user_name}: Level {data.get('level', 0)} - {data.get('commands_used', 0)} commands used\n"
+        
+    
+    await ctx.send(leaderboard_message)
+    user = str(ctx.author.id)
+    economy[user]['commands_used'] += 1
+    with open('economy.json', 'w') as f:
+        json.dump(economy, f)
+
 @commands.cooldown(1, 5400, commands.BucketType.user)
 @client.command()
 async def crime(ctx):
     user = str(ctx.author.id)
     if user not in economy:
-        economy[user] = {'coins': 1000, 'commands_used': 0, 'level': 1}
+        economy[user] = {'username': ctx.message.author.name, 'coins': 1000, 'commands_used': 0, 'level': 1}
+    amount = random.randint(100, 300)
     chance = random.randint(1, 100)
     if chance <= 30:
         amount = random.randint(1, 500)
@@ -85,12 +115,12 @@ async def uptime(ctx):
     with open('economy.json', 'w') as f:
         json.dump(economy, f)
 
-# Command to check your level
+
 @client.command()
 async def level(ctx):
     user = str(ctx.author.id)
     if user not in economy:
-        economy[user] = {'coins': 1000, 'commands_used': 0, 'level': 1}
+        economy[user] = {'username': ctx.message.author.name, 'coins': 1000, 'commands_used': 0, 'level': 1}
     current_level = economy[user]['level']
     commands_used = economy[user]['commands_used']
     required_commands = 10 * (current_level ** 2)
@@ -100,23 +130,29 @@ async def level(ctx):
     with open('economy.json', 'w') as f:
         json.dump(economy, f)
         
-# Command to check your balance
+
 @client.command()
 async def balance(ctx):
     user = str(ctx.author.id)
     if user not in economy:
-        economy[user] = {'coins': 1000, 'commands_used': 0, 'level': 1}
+        economy[user] = {'username': ctx.message.author.name, 'coins': 1000, 'commands_used': 0, 'level': 1}
     await ctx.send(f'You have {economy[user]["coins"]} coins')
     economy[user]['commands_used'] += 1
     with open('economy.json', 'w') as f:
         json.dump(economy, f)
 
-# Command to gamble coins
+
 @client.command()
 async def gamble(ctx, amount: int):
     user = str(ctx.author.id)
     if user not in economy:
-        economy[user] = {'coins': 1000, 'commands_used': 0, 'level': 1}
+        economy[user] = {'username': ctx.message.author.name, 'coins': 1000, 'commands_used': 0, 'level': 1}
+    if amount is None:
+        ctx.send("You need to specify the amount of coins you want to gamble!\nExample: .gamble 300")
+        return
+    if amount == 0:
+        await ctx.send("You cant gamble with 0 coins!")
+        return
     if economy[user]['coins'] < amount:
         await ctx.send('You do not have enough coins')
         return
@@ -154,23 +190,23 @@ async def poll(ctx, question, *options: str):
         await ctx.send("You need to provide at least 2 options.")
         return
 
-    # Create the poll message
+    
     poll_message = f"**{question}**\n\n"
 
     for i, option in enumerate(options):
-        emoji = chr(0x1f1e6 + i)  # A through J emoji
+        emoji = chr(0x1f1e6 + i)  
         poll_message += f"{emoji} {option}\n"
 
     poll_message += "\nReact to this message to vote!"
 
-    # Send the poll message and add reactions to it
+    
     message = await ctx.send(poll_message)
 
     for i in range(len(options)):
-        emoji = chr(0x1f1e6 + i)  # A through J emoji
+        emoji = chr(0x1f1e6 + i)  
         await message.add_reaction(emoji)
 
-    await ctx.message.delete()  # Delete the command message to keep the channel clean
+    await ctx.message.delete()  
     economy[user]['commands_used'] += 1
     with open('economy.json', 'w') as f:
         json.dump(economy, f)
@@ -213,7 +249,7 @@ async def botinfo(ctx):
     commands = len(client.commands)
     author = "Ja'Crispy#3192"
     version = "1.0"
-    #source_code = "[GitHub Repo Link Here]"
+    #source_code = "[]"
 
     embed = discord.Embed(title="Bot Information", color=0x00ff00)
     embed.add_field(name="Servers", value=servers, inline=False)
@@ -332,11 +368,224 @@ async def sourcecode(ctx):
     with open('economy.json', 'w') as f:
         json.dump(economy, f)
 
+@client.command()
+@commands.has_permissions(kick_members=True)
+async def kick(ctx, member: discord.Member, *, reason=None):
+    user = str(ctx.author.id)
+    if ctx.author == member:
+        await ctx.send("You can't kick yourself!")
+        return
+    if ctx.guild.owner == member:
+        await ctx.send("You can't kick the server owner!")
+        return
+    if not ctx.me.guild_permissions.kick_members:
+        await ctx.send("I don't have the necessary permissions to kick users.")
+        return
+
+    await member.kick(reason=reason)
+    await ctx.send(f"{member.mention} has been kicked from the server.")
+    economy[user]['commands_used'] += 1
+    with open('economy.json', 'w') as f:
+        json.dump(economy, f)
+
+@client.command()
+@commands.has_permissions(manage_roles=True)
+async def mute(ctx, member: discord.Member, *, reason=None):
+    user = str(ctx.author.id)
+    if ctx.author == member:
+        await ctx.send("You can't mute yourself!")
+        return
+
+    if ctx.guild.owner == member:
+        await ctx.send("You can't mute the server owner!")
+        return
+
+    muted_role = discord.utils.get(ctx.guild.roles, name="Muted")
+    if not muted_role:
+        muted_role = await ctx.guild.create_role(name="Muted")
+
+        for channel in ctx.guild.channels:
+            await channel.set_permissions(muted_role, speak=False, send_messages=False)
+        await ctx.send('There was no role called "Muted", So I made one for you with the correct permissions!')
+    await member.add_roles(muted_role, reason=reason)
+    await ctx.send(f"{member.mention} has been muted.")
+    economy[user]['commands_used'] += 1
+    with open('economy.json', 'w') as f:
+        json.dump(economy, f)
+
+@client.command()
+@commands.has_permissions(manage_roles=True)
+async def unmute(ctx, member: discord.Member):
+    user = str(ctx.author.id)
+    if ctx.author == member:
+        await ctx.send("You can't unmute yourself!")
+        return
+    if ctx.guild.owner == member:
+        await ctx.send("You can't unmute the server owner!")
+        return
+    muted_role = discord.utils.get(ctx.guild.roles, name="Muted")
+    if not muted_role:
+        await ctx.send("There's no Muted role to remove.")
+        return
+
+    await member.remove_roles(muted_role)
+    await ctx.send(f"{member.mention} has been unmuted.")
+    economy[user]['commands_used'] += 1
+    with open('economy.json', 'w') as f:
+        json.dump(economy, f)
+
+@client.command()
+@commands.check_any(commands.is_owner(), commands.has_permissions(administrator=True))
+async def clear(ctx, amount: int):
+    user = str(ctx.author.id)
+    await ctx.channel.purge(limit=amount + 1)
+    await ctx.send(f"Cleared {amount} messages!")
+    time.sleep(1)
+    await ctx.channel.purge(limit=1)
+    economy[user]['commands_used'] += 1
+    with open('economy.json', 'w') as f:
+        json.dump(economy, f)
+
+@client.command()
+async def fact(ctx):
+    user = str(ctx.author.id)
+    response = requests.get('https://uselessfacts.jsph.pl/random.json?language=en')
+
+    fact = response.json()['text']
+
+    await ctx.send(fact)
+
+    economy[user]['commands_used'] += 1
+    with open('economy.json', 'w') as f:
+        json.dump(economy, f)
+
+@client.command()
+async def gif(ctx, search_term):
+        user = str(ctx.author.id)
+        gifapikey = config['gifapi']
+            
+        response = requests.get(f'https://api.giphy.com/v1/gifs/search?q={search_term}&api_key={gifapikey}&limit=1')
+        
+        data = response.json()['data']
+        if len(data) > 0:
+            
+            gif_url = data[0]['images']['original']['url']
+            
+            await ctx.send(gif_url)
+        else:
+            
+            await ctx.send('Sorry, I couldn\'t find a GIF for that search term.')
+        
+        economy[user]['commands_used'] += 1
+        with open('economy.json', 'w') as f:
+            json.dump(economy, f)
+
+
+
+app_id = config['wolframid']
+
+
+wolframclient = wolframalpha.Client(app_id)
+@client.command()
+async def wolfram(ctx, *,question):
+    user = str(ctx.author.id)
+    res = wolframclient.query(question)
+    
+    
+    try:
+        
+        answer = next(res.results).text
+        
+        
+        await ctx.send(answer)
+    except StopIteration:
+        
+        await ctx.send("Sorry, I couldn't find an answer to that question.")
+        economy[user]['commands_used'] += 1
+        with open('economy.json', 'w') as f:
+            json.dump(economy, f)
+
+@client.command()
+async def remind(ctx, time, *, reminder):
+    user = str(ctx.author.id)
+    await ctx.send(f"Okay, I will remind you to {reminder} in {time}.")
+    time = time.lower()
+
+    if time.endswith("s"):
+        seconds = int(time[:-1])
+    elif time.endswith("m"):
+        seconds = int(time[:-1]) * 60
+    elif time.endswith("h"):
+        seconds = int(time[:-1]) * 3600
+    elif time.endswith("d"):
+        seconds = int(time[:-1]) * 86400
+    else:
+        await ctx.send("Sorry, I didn't understand the time format. Please use seconds (s), minutes (m), hours (h), or days (d).")
+        return
+
+    await asyncio.sleep(seconds)
+    await ctx.send(f"{ctx.author.mention}, you asked me to remind you to {reminder} {time} ago.")
+    economy[user]['commands_used'] += 1
+    with open('economy.json', 'w') as f:
+        json.dump(economy, f)
+
+
+@client.command()
+async def trivia(ctx):
+    user = str(ctx.author.id)
+    if user not in economy:
+        economy[user] = {'username': ctx.message.author.name, 'coins': 1000, 'commands_used': 0, 'level': 1}
+    trivia_api_url = "https://opentdb.com/api.php?amount=1&type=boolean"
+    response = requests.get(trivia_api_url)
+    data = json.loads(response.text)
+
+    # Extract the question and answer from the API response
+    question = data["results"][0]["question"]
+    correct_answer = data["results"][0]["correct_answer"]
+    
+    # Send the question to the chat
+    await ctx.send(f"Here's your question: True or False, {question}")
+    
+    # Wait for the user to answer
+    def check(m):
+        return m.author == ctx.author and m.channel == ctx.channel
+    
+    user_answer = await client.wait_for('message', check=check)
+    
+    # Check if the user's answer is correct and display the result in the chat
+    if user_answer.content.lower() == correct_answer.lower():
+        coinwinamount = random.randint(20, 70)
+        await ctx.send(f"Congratulations! You got it right.\nYou won {coinwinamount} Coins!")
+        economy[user]['coins'] += coinwinamount
+        if user not in stats:
+            stats[user] = {'username': ctx.message.author.name, 'triviawins': 0}
+        stats[user]['triviawins'] += 1
+        with open('stats.json', 'w') as f:
+            json.dump(stats, f)
+    else:
+        await ctx.send(f"Sorry, the correct answer was {correct_answer}.\nYou did not win any Coins.")
+    economy[user]['commands_used'] += 1
+    with open('economy.json', 'w') as f:
+        json.dump(economy, f)
+
+@client.command()
+async def mystats(ctx):
+    user = str(ctx.author.id)
+    triviawincount = stats[user]['triviawins']
+    usersname = stats[user]['username']
+
+    await ctx.send(f"**Stats for {usersname}**\nTrivia Wins: {triviawincount}")
+
+    economy[user]['commands_used'] += 1
+    with open('economy.json', 'w') as f:
+        json.dump(economy, f)
 # Save economy data when bot shuts down
 @client.event
 async def on_shutdown():
     with open('economy.json', 'w') as f:
         json.dump(economy, f)
+    with open('stats.json', 'w') as f:
+        json.dump(stats, f)
 
 # Handle CommandOnCooldown exception
 @client.event
@@ -347,6 +596,10 @@ async def on_command_error(ctx, error):
         await ctx.send(f"you can use that command again in {remaining_str}.")
     else:
         raise error
+@clear.error
+async def clear_error(ctx, error):
+    if isinstance(error, commands.CheckFailure):
+        await ctx.send("Sorry, you need administrator permissions to use this command.")
 
 # Start the bot
 print("Bot Online")
