@@ -9,12 +9,17 @@ import random
 import datetime
 import requests
 import praw
+from io import BytesIO
+from PIL import Image, ImageDraw, ImageFont
 
 start_time = datetime.datetime.now()
 
 # Load economy data from economy.json
 with open('economy.json', 'r') as f:
     economy = json.load(f)
+
+with open('config.json', 'r') as f:
+    config = json.load(f)
 
 # Initialize bot with a command prefix
 client = discord.Client(intents=discord.Intents.default())
@@ -28,7 +33,7 @@ async def on_ready():
 
 @client.command()
 async def help(ctx):
-    await ctx.send("**Fun**\n.meme\n.level\n.inspire\nmagic8ball (question here)\n.coinflip\n**Economy**\n.earn\n.balance\n.crime\n.gamble (amount here)\n**Useful**\n.serverinfo\n.userinfo @user\n.botinfo\n.uptime\n.sourcecode")
+    await ctx.send("**Fun**\n.meme\n.level\n.inspire\nmagic8ball (question here)\n.coinflip\n.quote\n**Economy**\n.earn\n.balance\n.crime\n.gamble (amount here)\n**Useful**\n.serverinfo\n.userinfo @user\n.botinfo\n.uptime\n.sourcecode")
 
 @commands.cooldown(1, 3600, commands.BucketType.user)
 @client.command()
@@ -262,8 +267,8 @@ async def serverinfo(ctx):
     with open('economy.json', 'w') as f:
         json.dump(economy, f)
 
-reddit = praw.Reddit(client_id='',
-                     client_secret='',
+reddit = praw.Reddit(client_id=config['redditclientid'],
+                     client_secret=config['redditclientseceret'],
                      user_agent='myBot/0.0.1')
 
 @client.command()
@@ -296,6 +301,27 @@ async def meme(ctx):
     with open('economy.json', 'w') as f:
         json.dump(economy, f)
 
+INSPIROBOT_API_URL = "https://inspirobot.me/api?generate=true"
+
+@client.command()
+async def quote(ctx):
+    user = str(ctx.author.id)
+
+    response = requests.get(INSPIROBOT_API_URL)
+    if response.status_code == 200:
+        image_url = response.text.strip()
+    else:
+        await ctx.send("Sorry, I cant get a quote right now")
+        return
+
+    image_data = requests.get(image_url).content
+
+    file = discord.File(BytesIO(image_data), filename="inspirobot.jpg")
+    await ctx.send(file=file)
+    economy[user]['commands_used'] += 1
+    with open('economy.json', 'w') as f:
+        json.dump(economy, f)
+
 @client.command()
 async def sourcecode(ctx):
     user = str(ctx.author.id)
@@ -324,4 +350,4 @@ async def on_command_error(ctx, error):
 
 # Start the bot
 print("Bot Online")
-client.run('notsharingthis')
+client.run(config['token'])
