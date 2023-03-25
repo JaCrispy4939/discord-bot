@@ -1,0 +1,5 @@
+{
+	"token": "yourdiscordbottokenhere",
+    "redditclientid" : "yourredditclientidhere",
+    "redditclientseceret" : "yourredditclientsecerethere"
+}
