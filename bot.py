@@ -15,6 +15,9 @@ from io import BytesIO
 from PIL import Image, ImageDraw, ImageFont
 import wolframalpha
 import asyncio
+from craiyon import Craiyon
+from craiyon import Craiyon, craiyon_utils
+import base64
 
 
 start_time = datetime.datetime.now()
@@ -41,7 +44,7 @@ async def on_ready():
 
 @client.command()
 async def help(ctx):
-    await ctx.send("**Fun**\n.meme\n.gif term\n.trivia\n.mystats\n.level\n.inspire\nmagic8ball (question here)\n.coinflip\n.quote\n.fact\n**Economy**\n.earn\n.blackjack (amount)\n.balance\n.crime\n.gamble (amount here)\n**Useful**\n.serverinfo\n.userinfo @user\n.botinfo\n.uptime\n.sourcecode\n**Moderation**\n.clear (amount)\n.kick @user\n.mute @user\n.unmute @user\n")
+    await ctx.send("**Fun**\n.image (promt)\n.meme\n.gif term\n.trivia\n.mystats\n.level\n.inspire\nmagic8ball (question here)\n.coinflip\n.quote\n.fact\n**Economy**\n.earn\n.blackjack (amount)\n.balance\n.crime\n.gamble (amount here)\n**Useful**\n.serverinfo\n.userinfo @user\n.botinfo\n.uptime\n.sourcecode\n**Moderation**\n.clear (amount)\n.kick @user\n.mute @user\n.unmute @user\n")
 
 @commands.cooldown(1, 3600, commands.BucketType.user)
 @client.command()
@@ -248,7 +251,7 @@ async def botinfo(ctx):
     servers = len(client.guilds)
     commands = len(client.commands)
     author = "Ja'Crispy#3192"
-    version = "1.0"
+    version = "1.4"
     #source_code = "[]"
 
     embed = discord.Embed(title="Bot Information", color=0x00ff00)
@@ -677,11 +680,64 @@ async def blackjack(ctx, amount: int):
         await ctx.send("You lose.")
         await ctx.send(f"You lost {amount} coins!")
         economy[user]['coins'] -= amount
+    economy[user]['commands_used'] += 1
+    with open('economy.json', 'w') as f:
+        json.dump(economy, f)
 
     with open('stats.json', 'w') as f:
         json.dump(stats, f)
     with open('economy.json', 'w') as f:
         json.dump(economy, f)
+
+generator = Craiyon() # Initialize Craiyon() class
+@client.command()
+async def image(ctx, *, prompt: str):
+    user = str(ctx.author.id)
+    await ctx.send(f"Please wait, this may take a minute or two\nGenerating prompt \"{prompt}\"...")
+    
+    generated_images = await generator.async_generate(prompt) 
+    b64_list = await craiyon_utils.async_encode_base64(generated_images.images) # Download images from https://img.craiyon.com and store them as b64 bytestring object
+    
+    images1 = []
+    for index, image in enumerate(b64_list): # Loop through b64_list, keeping track of the index
+        img_bytes = BytesIO(base64.b64decode(image)) # Decode the image and store it as a bytes object
+        image = discord.File(img_bytes)
+        image.filename = f"result{index}.webp"
+        images1.append(image) # Add the image to the images1 list
+        
+    await ctx.reply(files=images1) # Reply to the user with all 9 images in 1 message
+    economy[user]['commands_used'] += 1
+    with open('economy.json', 'w') as f:
+        json.dump(economy, f)
+
+
+
+def get_word_of_the_day():
+    api_key = config['websterdictkey']
+    url = f'https://www.dictionaryapi.com/api/v3/references/collegiate/json/wotd?key={api_key}'
+    # Send a GET request to the Merriam-Webster API to fetch the word of the day
+    response = requests.get(url)
+
+    # Convert the response to a JSON object
+    data = json.loads(response.text)
+
+    # Extract the word and its definition from the JSON object
+    word = data[0]['meta']['id']
+    definition = data[0]['def'][0]['sseq'][0][0][1]['dt'][0][1]
+
+    # Format the response string
+    response_str = f'Word of the day: **{word.capitalize()}**\nDefinition: {definition}'
+
+    return response_str
+
+# Example command function
+@client.command()
+async def word(ctx):
+    # Call the get_word_of_the_day function to fetch the word of the day
+    response = get_word_of_the_day()
+
+    # Send the response back to the Discord channel or user
+    await ctx.send(response)
 
 # Save all data when bot shuts down
 @client.event
