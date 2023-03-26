@@ -3,5 +3,6 @@
     "redditclientid" : "yourredditclientidhere",
     "redditclientseceret" : "yourredditclientsecerethere"
     "gifapi" : "yourgifphyapihere",
-    "wolframid" : "yourwolframalphaidhere"
+    "wolframid" : "yourwolframalphaidhere",
+    "websterdictkey" : "yourwebsterdictionarykeyhere"
 }
