@@ -41,7 +41,7 @@ async def on_ready():
 
 @client.command()
 async def help(ctx):
-    await ctx.send("**Fun**\n.meme\n.gif term\n.trivia\n.mystats\n.level\n.inspire\nmagic8ball (question here)\n.coinflip\n.quote\n.fact\n**Economy**\n.earn\n.balance\n.crime\n.gamble (amount here)\n**Useful**\n.serverinfo\n.userinfo @user\n.botinfo\n.uptime\n.sourcecode\n**Moderation**\n.clear (amount)\n.kick @user\n.mute @user\n.unmute @user\n")
+    await ctx.send("**Fun**\n.meme\n.gif term\n.trivia\n.mystats\n.level\n.inspire\nmagic8ball (question here)\n.coinflip\n.quote\n.fact\n**Economy**\n.earn\n.blackjack (amount)\n.balance\n.crime\n.gamble (amount here)\n**Useful**\n.serverinfo\n.userinfo @user\n.botinfo\n.uptime\n.sourcecode\n**Moderation**\n.clear (amount)\n.kick @user\n.mute @user\n.unmute @user\n")
 
 @commands.cooldown(1, 3600, commands.BucketType.user)
 @client.command()
@@ -558,7 +558,8 @@ async def trivia(ctx):
         await ctx.send(f"Congratulations! You got it right.\nYou won {coinwinamount} Coins!")
         economy[user]['coins'] += coinwinamount
         if user not in stats:
-            stats[user] = {'username': ctx.message.author.name, 'triviawins': 0}
+            stats[user] = {'username': ctx.message.author.name, 'triviawins': 0, 'blackjackwins': 0}
+
         stats[user]['triviawins'] += 1
         with open('stats.json', 'w') as f:
             json.dump(stats, f)
@@ -571,15 +572,118 @@ async def trivia(ctx):
 @client.command()
 async def mystats(ctx):
     user = str(ctx.author.id)
+    if user not in stats:
+        stats[user] = {'username': ctx.message.author.name, 'triviawins': 0, 'blackjackwins': 0}
+
     triviawincount = stats[user]['triviawins']
+    blackjackwincount = stats[user]['blackjackwins']
     usersname = stats[user]['username']
 
-    await ctx.send(f"**Stats for {usersname}**\nTrivia Wins: {triviawincount}")
+    await ctx.send(f"**Stats for {usersname}**\nTrivia Wins: {triviawincount}\nBlackjack Wins: {blackjackwincount}")
 
     economy[user]['commands_used'] += 1
     with open('economy.json', 'w') as f:
         json.dump(economy, f)
-# Save economy data when bot shuts down
+
+
+@client.command()
+async def blackjack(ctx, amount: int):
+    user = str(ctx.author.id)
+    if user not in economy:
+        economy[user] = {'username': ctx.message.author.name, 'coins': 1000, 'commands_used': 0, 'level': 1}
+    if amount == 0:
+        await ctx.send("You cant play with 0 coins!")
+        return
+    if economy[user]['coins'] < amount:
+        await ctx.send('You do not have enough coins')
+        return
+
+    deck = ['2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K', 'A'] * 4
+    random.shuffle(deck)
+
+    player_hand = []
+    bot_hand = []
+
+
+    def calculate_hand(hand):
+        value = 0
+        aces = 0
+        for card in hand:
+            if card == 'A':
+                aces += 1
+            elif card in ['J', 'Q', 'K']:
+                value += 10
+            else:
+                value += int(card)
+        for i in range(aces):
+            if value + 11 <= 21:
+                value += 11
+            else:
+                value += 1
+        return value
+
+
+    player_hand.append(deck.pop())
+    bot_hand.append(deck.pop())
+    player_hand.append(deck.pop())
+    bot_hand.append(deck.pop())
+
+
+    await ctx.send(f"Your hand: {' '.join(player_hand)} Total: {calculate_hand(player_hand)}\nBot's hand: [{bot_hand[0]},] Total: {calculate_hand(bot_hand)} \nType hit or stand in chat")
+
+
+    if calculate_hand(player_hand) == 21:
+        await ctx.send("Blackjack! You win!")
+        return
+
+
+    while True:
+        def check_hit_or_stand(message):
+            return message.author == ctx.author and message.content.lower() in ['hit', 'stand']
+        action_message = await client.wait_for('message', check=check_hit_or_stand)
+        action = action_message.content.lower()
+        if action == 'hit':
+            player_hand.append(deck.pop())
+            await ctx.send(f"You drew a {player_hand[-1]}.\nYour hand: {player_hand} Total: {calculate_hand(player_hand)}\nBot's hand: [{bot_hand[0]},] Total: {calculate_hand(bot_hand)}\nType hit or stand in chat")
+            if calculate_hand(player_hand) > 21:
+                await ctx.send("Bust! You lose.")
+                await ctx.send(f"You lost {amount} coins!")
+                economy[user]['coins'] -= amount
+                return
+        elif action == 'stand':
+            break
+
+
+    while calculate_hand(bot_hand) < 17:
+        bot_hand.append(deck.pop())
+    await ctx.send(f"Bot's hand: {bot_hand} Total: {calculate_hand(bot_hand)}")
+
+
+    player_value = calculate_hand(player_hand)
+    bot_value = calculate_hand(bot_hand)
+    if player_value > bot_value or bot_value > 21:
+        await ctx.send("You win!")
+        if user not in stats:
+            stats[user] = {'username': ctx.message.author.name, 'triviawins': 0, 'blackjackwins': 0}
+        stats[user]['blackjackwins'] += 1
+
+        economy[user]['coins'] += amount
+        await ctx.send(f'You won {amount} coins')
+
+    elif player_value == bot_value:
+        await ctx.send("It's a tie!")
+        await ctx.send("You got your coins back!")
+    else:
+        await ctx.send("You lose.")
+        await ctx.send(f"You lost {amount} coins!")
+        economy[user]['coins'] -= amount
+
+    with open('stats.json', 'w') as f:
+        json.dump(stats, f)
+    with open('economy.json', 'w') as f:
+        json.dump(economy, f)
+
+# Save all data when bot shuts down
 @client.event
 async def on_shutdown():
     with open('economy.json', 'w') as f:
